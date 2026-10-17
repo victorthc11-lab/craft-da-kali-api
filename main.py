@@ -12,7 +12,7 @@ from typing import List
 os.makedirs("imagens", exist_ok=True)
 
 # Cola aqui o link que preparaste no bloco de notas (já com a tua password)
-SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://postgres:LnfQYdCxasavCTan@db.cteeekeastevbdokdden.supabase.co:5432/postgres"
+SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://postgres.cteeekeastevbdokdden:[LnfQYdCxasavCTan]@aws-1-sa-east-1.pooler.supabase.com:5432/postgres"
 
 # Repara que tirámos o "connect_args", pois o Postgres não precisa disso
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

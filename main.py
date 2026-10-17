@@ -1,5 +1,6 @@
 import shutil
 import os
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -52,6 +53,13 @@ class ProdutoResponse(ProdutoCreate):
 
 app = FastAPI(title="API Craft da Kali")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://craft-da-kali-site.vercel.app/"], # Isto permite que a tua Vercel aceda à API
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

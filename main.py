@@ -1,5 +1,6 @@
 import os
 import time
+import shutil # <-- Adicionado para lidar com ficheiros físicos
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,13 +11,11 @@ from typing import List
 from supabase import create_client, Client
 
 # --- CONFIGURAÇÕES DO SUPABASE STORAGE ---
-# Substitui com os teus dados do painel do Supabase
 SUPABASE_URL = "https://cteeekeastevbdokdden.supabase.co"
-SUPABASE_KEY = "sb_secret_WTLUQvbjjxrec-L6wU3bJg_W3H6XQcw"
+SUPABASE_KEY = "sb_secret_WTLUQvbjjxrec-L6wU3bJg_W3H6XQcw"# <-- COLA AQUI A TUA CHAVE SECRETA DE NOVO
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Cria a pasta imagens localmente só para prevenir erros de arranque antigos
 os.makedirs("imagens", exist_ok=True)
 
 SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://postgres.cteeekeastevbdokdden:LnfQYdCxasavCTan@aws-1-sa-east-1.pooler.supabase.com:6543/postgres"
@@ -69,8 +68,6 @@ def get_db():
     finally:
         db.close()
 
-# --- ROTAS DE PRODUTOS ---
-
 @app.get("/produtos", response_model=List[ProdutoResponse])
 async def listar_produtos(db: Session = Depends(get_db)):
     return db.query(ProdutoDB).all()
@@ -97,38 +94,36 @@ async def atualizar_produto(produto_id: int, produto_atualizado: ProdutoCreate, 
     produto = db.query(ProdutoDB).filter(ProdutoDB.id == produto_id).first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
-
     produto.nome = produto_atualizado.nome
     produto.descricao = produto_atualizado.descricao
     produto.preco = produto_atualizado.preco
     produto.categoria = produto_atualizado.categoria
     produto.imagem_url = produto_atualizado.imagem_url
-
     db.commit()
     db.refresh(produto)
     return produto
 
-# --- NOVA ROTA DE UPLOAD PARA A NUVEM ---
 @app.post("/upload-imagem/")
 async def upload_imagem(file: UploadFile = File(...)):
-    conteudo = await file.read()
-    
-    # Cria um nome único (timestamp + nome do ficheiro) para evitar conflitos de fotos iguais
     nome_seguro = f"{int(time.time())}_{file.filename.replace(' ', '_')}"
+    file_location = f"imagens/{nome_seguro}"
+
+    # 1. Guarda a imagem fisicamente primeiro (Resolve bugs da biblioteca do Supabase)
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
 
     try:
-        # Envia a foto diretamente para o bucket 'produtos' no Supabase
-        supabase.storage.from_("produtos").upload(
-            path=nome_seguro,
-            file=conteudo,
-            file_options={"content-type": file.content_type}
-        )
+        # 2. Faz upload do ficheiro físico para o Supabase
+        supabase.storage.from_("produtos").upload(nome_seguro, file_location)
 
-        # Pede ao Supabase o link público permanente da imagem
+        # 3. Pede o link público permanente
         url_publica = supabase.storage.from_("produtos").get_public_url(nome_seguro)
 
-        # Devolve o link da nuvem para o painel de administração guardar
         return {"imagem_url": url_publica}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao guardar imagem na nuvem: {str(e)}")
+        # 4. Se falhar, vai "gritar" o erro exato no painel do Render!
+        print(f"========== ERRO FATAL NO SUPABASE ==========")
+        print(str(e))
+        print(f"============================================")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")

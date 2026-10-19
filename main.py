@@ -12,7 +12,7 @@ from supabase import create_client, Client
 # --- CONFIGURAÇÕES DO SUPABASE STORAGE ---
 # Substitui com os teus dados do painel do Supabase
 SUPABASE_URL = "https://cteeekeastevbdokdden.supabase.co"
-SUPABASE_KEY = "sb_publishable_x_ibpkJ3TpjiJTm30kZ8ug_g7TaFtft"
+SUPABASE_KEY = "sb_secret_WTLUQvbjjxrec-L6wU3bJg_W3H6XQcw"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 

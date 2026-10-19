@@ -1,6 +1,5 @@
-import shutil
 import os
-from fastapi.middleware.cors import CORSMiddleware
+import time
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,18 +7,23 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from typing import List
+from supabase import create_client, Client
 
-# Cria a pasta imagens automaticamente se não existir
+# --- CONFIGURAÇÕES DO SUPABASE STORAGE ---
+# Substitui com os teus dados do painel do Supabase
+SUPABASE_URL = "https://cteeekeastevbdokdden.supabase.co"
+SUPABASE_KEY = "sb_publishable_x_ibpkJ3TpjiJTm30kZ8ug_g7TaFtft"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Cria a pasta imagens localmente só para prevenir erros de arranque antigos
 os.makedirs("imagens", exist_ok=True)
 
-# Cola aqui o link que preparaste no bloco de notas (já com a tua password)
 SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://postgres.cteeekeastevbdokdden:LnfQYdCxasavCTan@aws-1-sa-east-1.pooler.supabase.com:6543/postgres"
 
-# Repara que tirámos o "connect_args", pois o Postgres não precisa disso
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-
 
 class ProdutoDB(Base):
     __tablename__ = "produtos"
@@ -31,9 +35,7 @@ class ProdutoDB(Base):
     imagem_url = Column(String)
     disponivel = Column(Boolean, default=True)
 
-
 Base.metadata.create_all(bind=engine)
-
 
 class ProdutoCreate(BaseModel):
     nome: str
@@ -43,13 +45,10 @@ class ProdutoCreate(BaseModel):
     imagem_url: str
     disponivel: bool = True
 
-
 class ProdutoResponse(ProdutoCreate):
     id: int
-
     class Config:
         from_attributes = True
-
 
 app = FastAPI(title="API Craft da Kali")
 
@@ -63,7 +62,6 @@ app.add_middleware(
 
 app.mount("/imagens", StaticFiles(directory="imagens"), name="imagens")
 
-
 def get_db():
     db = SessionLocal()
     try:
@@ -71,13 +69,11 @@ def get_db():
     finally:
         db.close()
 
-
 # --- ROTAS DE PRODUTOS ---
 
 @app.get("/produtos", response_model=List[ProdutoResponse])
 async def listar_produtos(db: Session = Depends(get_db)):
     return db.query(ProdutoDB).all()
-
 
 @app.post("/produtos", response_model=ProdutoResponse)
 async def adicionar_produto(produto: ProdutoCreate, db: Session = Depends(get_db)):
@@ -86,7 +82,6 @@ async def adicionar_produto(produto: ProdutoCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(novo_produto)
     return novo_produto
-
 
 @app.delete("/produtos/{produto_id}")
 async def deletar_produto(produto_id: int, db: Session = Depends(get_db)):
@@ -97,8 +92,6 @@ async def deletar_produto(produto_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"mensagem": "Apagado com sucesso"}
 
-
-# NOVO: Rota para Editar (Atualizar) um produto
 @app.put("/produtos/{produto_id}", response_model=ProdutoResponse)
 async def atualizar_produto(produto_id: int, produto_atualizado: ProdutoCreate, db: Session = Depends(get_db)):
     produto = db.query(ProdutoDB).filter(ProdutoDB.id == produto_id).first()
@@ -115,14 +108,27 @@ async def atualizar_produto(produto_id: int, produto_atualizado: ProdutoCreate, 
     db.refresh(produto)
     return produto
 
-
-# NOVO: Rota para fazer Upload da Imagem arrastada
+# --- NOVA ROTA DE UPLOAD PARA A NUVEM ---
 @app.post("/upload-imagem/")
 async def upload_imagem(file: UploadFile = File(...)):
-    # Guarda o ficheiro fisicamente na pasta 'imagens'
-    file_location = f"imagens/{file.filename}"
-    with open(file_location, "wb+") as file_object:
-        shutil.copyfileobj(file.file, file_object)
+    conteudo = await file.read()
+    
+    # Cria um nome único (timestamp + nome do ficheiro) para evitar conflitos de fotos iguais
+    nome_seguro = f"{int(time.time())}_{file.filename.replace(' ', '_')}"
 
-    # Devolve a URL automática para o front-end usar
-    return {"imagem_url": f"http://127.0.0.1:8000/imagens/{file.filename}"}
+    try:
+        # Envia a foto diretamente para o bucket 'produtos' no Supabase
+        supabase.storage.from_("produtos").upload(
+            path=nome_seguro,
+            file=conteudo,
+            file_options={"content-type": file.content_type}
+        )
+
+        # Pede ao Supabase o link público permanente da imagem
+        url_publica = supabase.storage.from_("produtos").get_public_url(nome_seguro)
+
+        # Devolve o link da nuvem para o painel de administração guardar
+        return {"imagem_url": url_publica}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao guardar imagem na nuvem: {str(e)}")

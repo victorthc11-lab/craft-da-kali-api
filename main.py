@@ -12,7 +12,7 @@ from supabase import create_client, Client
 
 # --- CONFIGURAÇÕES DO SUPABASE STORAGE ---
 SUPABASE_URL = "https://cteeekeastevbdokdden.supabase.co"
-SUPABASE_KEY = "sb_secret_WTLUQvbjjxrec-L6wU3bJg_W3H6XQcw"# <-- COLA AQUI A TUA CHAVE SECRETA DE NOVO
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0ZWVla2Vhc3RldmJkb2tkZGVuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MjIwNjI4OCwiZXhwIjoyMTA3NzgyMjg4fQ.-J1l_0a1dXVL0HSW4ZVEbljiLvyfAiM41ndHvgw0QUQ"# <-- COLA AQUI A TUA CHAVE SECRETA DE NOVO
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
